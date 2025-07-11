@@ -309,17 +309,35 @@ book_service = BookService()
 @app.route('/api/book/<isbn>', methods=['GET'])
 def get_book_by_isbn(isbn):
     try:
-        print(f"Received ISBN request: {isbn}")
+        print(f"=== Received ISBN request: {isbn} ===")
+        
+        # ISBNのバリデーション
+        if not isbn or len(isbn) < 10:
+            return jsonify({'error': 'ISBNが無効です'}), 400
+        
+        # 書籍データを取得
         book_data = openbd_api.get_book_by_isbn(isbn)
+        
         if book_data:
-            print(f"Book data found: {book_data}")
+            print(f"=== Book data found: {book_data} ===")
             return jsonify(book_data)
         else:
-            print("No book data found")
-            return jsonify({'error': '書籍が見つかりません'}), 404
+            print("=== No book data found ===")
+            return jsonify({
+                'error': '書籍が見つかりません', 
+                'isbn': isbn,
+                'message': 'OpenBD APIでこのISBNの書籍情報を見つけることができませんでした'
+            }), 404
+            
     except Exception as e:
-        print(f"Error in get_book_by_isbn: {e}")
-        return jsonify({'error': str(e)}), 500
+        print(f"=== Error in get_book_by_isbn: {e} ===")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'error': str(e),
+            'isbn': isbn,
+            'message': 'サーバーエラーが発生しました'
+        }), 500
 
 @app.route('/api/books', methods=['GET'])
 def get_all_books():
@@ -364,6 +382,28 @@ def delete_book(book_id):
 @app.route('/api/health', methods=['GET'])
 def health_check():
     return jsonify({'status': 'healthy'})
+
+@app.route('/api/test-openbd/<isbn>', methods=['GET'])
+def test_openbd(isbn):
+    """OpenBD APIの動作をテストするエンドポイント"""
+    try:
+        print(f"Testing OpenBD API with ISBN: {isbn}")
+        
+        # 直接OpenBD APIを呼び出し
+        import requests
+        response = requests.get(f"https://api.openbd.jp/v1/get?isbn={isbn}", timeout=10)
+        
+        return jsonify({
+            'status_code': response.status_code,
+            'response_data': response.json(),
+            'isbn': isbn
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'error': str(e),
+            'isbn': isbn
+        }), 500
 
 # Vercel用のハンドラー
 def handler(request):

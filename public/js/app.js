@@ -24,6 +24,7 @@ class BookApp {
 
     async addBook() {
         const isbnInput = document.getElementById('isbn-input');
+        const addBookBtn = document.getElementById('add-book-btn');
         const isbn = isbnInput.value.trim();
 
         if (!isbn) {
@@ -32,22 +33,40 @@ class BookApp {
         }
 
         if (!this.validateISBN(isbn)) {
-            alert('正しいISBNコードを入力してください');
+            alert('正しいISBNコードを入力してください（10桁または13桁の数字）');
             return;
         }
 
+        // ボタンを無効化してローディング状態に
+        addBookBtn.disabled = true;
+        addBookBtn.textContent = '取得中...';
+
         try {
+            console.log(`書籍データを取得中: ${isbn}`);
             const bookData = await this.fetchBookData(isbn);
+            
             if (bookData) {
+                console.log('書籍データ取得成功:', bookData);
                 const book = new Book(bookData);
                 this.books.push(book);
                 this.saveBooks();
                 this.renderBooks();
                 isbnInput.value = '';
+                alert(`書籍「${bookData.title}」を追加しました`);
             }
         } catch (error) {
             console.error('書籍データの取得に失敗しました:', error);
-            alert('書籍データの取得に失敗しました');
+            
+            // より詳細なエラーメッセージを表示
+            let errorMessage = '書籍データの取得に失敗しました';
+            if (error.message) {
+                errorMessage += `: ${error.message}`;
+            }
+            alert(errorMessage);
+        } finally {
+            // ボタンを元に戻す
+            addBookBtn.disabled = false;
+            addBookBtn.textContent = '書籍を追加';
         }
     }
 
@@ -61,11 +80,22 @@ class BookApp {
             const apiUrl = window.location.hostname === 'localhost' 
                 ? `http://localhost:5000/api/book/${isbn}`
                 : `/api/book/${isbn}`;
+            
+            console.log(`API URL: ${apiUrl}`);
+            
             const response = await fetch(apiUrl);
+            console.log(`Response status: ${response.status}`);
+            
             if (!response.ok) {
-                throw new Error('書籍情報が見つかりません');
+                const errorData = await response.json().catch(() => ({}));
+                const errorMessage = errorData.message || errorData.error || `HTTP ${response.status}`;
+                throw new Error(errorMessage);
             }
-            return await response.json();
+            
+            const data = await response.json();
+            console.log('API response data:', data);
+            
+            return data;
         } catch (error) {
             console.error('API呼び出しエラー:', error);
             throw error;
