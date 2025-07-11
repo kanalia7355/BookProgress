@@ -4,7 +4,7 @@
 
 ```
 BookProcess/
-├── frontend/
+├── public/                 # Vercel静的ファイル
 │   ├── index.html
 │   ├── css/
 │   │   └── style.css
@@ -14,7 +14,9 @@ BookProcess/
 │   │   └── timer.js
 │   └── assets/
 │       └── images/
-├── backend/
+├── api/                    # Vercelサーバーレス関数
+│   └── index.py
+├── backend/                # 開発用（ローカル）
 │   ├── app.py
 │   ├── api/
 │   │   ├── __init__.py

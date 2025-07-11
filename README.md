@@ -40,10 +40,10 @@ python app.py
 
 ### フロントエンド
 
-1. ブラウザで `frontend/index.html` を開く
+1. ブラウザで `public/index.html` を開く
 2. またはローカルサーバーを起動
 ```bash
-cd frontend
+cd public
 python -m http.server 8000
 ```
 
@@ -67,11 +67,13 @@ python -m http.server 8000
 
 ```
 BookProcess/
-├── frontend/           # フロントエンド
+├── public/            # フロントエンド（静的ファイル）
 │   ├── index.html
 │   ├── css/
 │   └── js/
-├── backend/            # バックエンド
+├── api/               # Vercel サーバーレス関数
+│   └── index.py
+├── backend/           # バックエンド（開発用）
 │   ├── app.py
 │   ├── api/
 │   └── models/
