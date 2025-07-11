@@ -79,7 +79,7 @@ class BookApp {
         try {
             const apiUrl = window.location.hostname === 'localhost' 
                 ? `http://localhost:5000/api/book/${isbn}`
-                : `/api/book/${isbn}`;
+                : `/api/book-info?isbn=${isbn}`;
             
             console.log(`API URL: ${apiUrl}`);
             
