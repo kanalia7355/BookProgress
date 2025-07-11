@@ -37,19 +37,28 @@ class OpenBDApi:
             response.raise_for_status()
             
             data = response.json()
-            print(f"OpenBD API response: {data}")
+            print(f"OpenBD API response length: {len(data) if data else 0}")
             
             if data and len(data) > 0 and data[0] is not None:
                 book_info = data[0]
+                print(f"Book info keys: {list(book_info.keys())}")
                 
                 # summaryオブジェクトから基本情報を取得
                 summary = book_info.get('summary', {})
+                print(f"Summary: {summary}")
                 
                 # onixオブジェクトから詳細情報を取得
                 onix = book_info.get('onix', {})
+                print(f"Onix keys: {list(onix.keys()) if onix else 'None'}")
+                
+                # タイトルの取得（複数の方法を試行）
+                title = self.extract_title(onix, summary)
                 
                 # 著者情報の取得
                 author = self.extract_author(onix, summary)
+                
+                # 出版社の取得
+                publisher = self.extract_publisher(onix, summary)
                 
                 # ページ数の取得
                 total_pages = self.extract_pages(onix, summary)
@@ -60,17 +69,20 @@ class OpenBDApi:
                 # 表紙画像の取得
                 cover_image = self.extract_cover_image(onix, summary)
                 
-                return {
+                result = {
                     'isbn': isbn,
-                    'title': summary.get('title', ''),
+                    'title': title,
                     'author': author,
-                    'publisher': summary.get('publisher', ''),
+                    'publisher': publisher,
                     'pubdate': pubdate,
                     'totalPages': total_pages,
                     'coverImage': cover_image,
                     'currentPage': 0,
                     'readingTime': 0
                 }
+                
+                print(f"Final result: {result}")
+                return result
             else:
                 print("No book data found in OpenBD response")
                 return None
@@ -81,6 +93,46 @@ class OpenBDApi:
         except Exception as e:
             print(f"OpenBD API error: {e}")
             return None
+    
+    def extract_title(self, onix, summary):
+        # summaryから取得
+        title = summary.get('title', '')
+        if title:
+            return title
+        
+        # onixから取得
+        try:
+            title_detail = onix.get('DescriptiveDetail', {}).get('TitleDetail', {})
+            if isinstance(title_detail, dict):
+                title_element = title_detail.get('TitleElement', {})
+                if isinstance(title_element, dict):
+                    title_text = title_element.get('TitleText', {})
+                    if isinstance(title_text, dict):
+                        return title_text.get('content', '')
+        except Exception as e:
+            print(f"Error extracting title: {e}")
+        
+        return ''
+    
+    def extract_publisher(self, onix, summary):
+        # summaryから取得
+        publisher = summary.get('publisher', '')
+        if publisher:
+            return publisher
+        
+        # onixから取得
+        try:
+            publishing_detail = onix.get('PublishingDetail', {})
+            if isinstance(publishing_detail, dict):
+                publishers = publishing_detail.get('Publisher', [])
+                if isinstance(publishers, list) and len(publishers) > 0:
+                    publisher_name = publishers[0].get('PublisherName', '')
+                    if publisher_name:
+                        return publisher_name
+        except Exception as e:
+            print(f"Error extracting publisher: {e}")
+        
+        return ''
     
     def extract_author(self, onix, summary):
         # summaryから著者情報を取得
@@ -93,10 +145,30 @@ class OpenBDApi:
             contributors = onix.get('DescriptiveDetail', {}).get('Contributor', [])
             if isinstance(contributors, list) and len(contributors) > 0:
                 for contributor in contributors:
-                    if contributor.get('ContributorRole') == 'A01':  # 著者
-                        person_name = contributor.get('PersonName', '')
-                        if person_name:
+                    # ContributorRoleが配列の場合とstrの場合を考慮
+                    contributor_roles = contributor.get('ContributorRole', [])
+                    if isinstance(contributor_roles, list):
+                        if 'A01' in contributor_roles:  # 著者
+                            person_name = contributor.get('PersonName', {})
+                            if isinstance(person_name, dict):
+                                return person_name.get('content', '')
+                            elif isinstance(person_name, str):
+                                return person_name
+                    elif contributor_roles == 'A01':
+                        person_name = contributor.get('PersonName', {})
+                        if isinstance(person_name, dict):
+                            return person_name.get('content', '')
+                        elif isinstance(person_name, str):
                             return person_name
+                
+                # 最初の著者を取得（役割が不明な場合）
+                if len(contributors) > 0:
+                    person_name = contributors[0].get('PersonName', {})
+                    if isinstance(person_name, dict):
+                        return person_name.get('content', '')
+                    elif isinstance(person_name, str):
+                        return person_name
+                        
         except Exception as e:
             print(f"Error extracting author: {e}")
         
