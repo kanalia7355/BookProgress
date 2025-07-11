@@ -12,126 +12,188 @@ from datetime import datetime
 app = Flask(__name__)
 CORS(app)
 
-# NDLApi クラスを直接定義
-class NDLApi:
+# OpenBD API クラスを直接定義
+class OpenBDApi:
     def __init__(self):
-        self.base_url = "https://iss.ndl.go.jp/api/sru"
-        self.openbd_url = "https://api.openbd.jp/v1/get"
+        self.base_url = "https://api.openbd.jp/v1/get"
     
     def get_book_by_isbn(self, isbn):
         cleaned_isbn = self.clean_isbn(isbn)
+        print(f"Searching for ISBN: {cleaned_isbn}")
         
         book_data = self.get_from_openbd(cleaned_isbn)
-        if book_data:
-            return book_data
-        
-        book_data = self.get_from_ndl(cleaned_isbn)
         return book_data
     
     def clean_isbn(self, isbn):
-        return re.sub(r'[^0-9X]', '', isbn.upper())
+        # ISBNから数字とXのみを抽出
+        cleaned = re.sub(r'[^0-9X]', '', isbn.upper())
+        print(f"Cleaned ISBN: {cleaned}")
+        return cleaned
     
     def get_from_openbd(self, isbn):
         try:
-            response = requests.get(f"{self.openbd_url}?isbn={isbn}")
+            # OpenBD APIに複数のISBNを送信可能（カンマ区切り）
+            response = requests.get(f"{self.base_url}?isbn={isbn}", timeout=10)
             response.raise_for_status()
             
             data = response.json()
-            if data and data[0]:
+            print(f"OpenBD API response: {data}")
+            
+            if data and len(data) > 0 and data[0] is not None:
                 book_info = data[0]
+                
+                # summaryオブジェクトから基本情報を取得
                 summary = book_info.get('summary', {})
+                
+                # onixオブジェクトから詳細情報を取得
+                onix = book_info.get('onix', {})
+                
+                # 著者情報の取得
+                author = self.extract_author(onix, summary)
+                
+                # ページ数の取得
+                total_pages = self.extract_pages(onix, summary)
+                
+                # 出版日の取得
+                pubdate = self.extract_pubdate(onix, summary)
+                
+                # 表紙画像の取得
+                cover_image = self.extract_cover_image(onix, summary)
                 
                 return {
                     'isbn': isbn,
                     'title': summary.get('title', ''),
-                    'author': summary.get('author', ''),
+                    'author': author,
                     'publisher': summary.get('publisher', ''),
-                    'pubdate': summary.get('pubdate', ''),
-                    'totalPages': self.extract_pages(summary.get('extent', '')),
-                    'coverImage': summary.get('cover', ''),
+                    'pubdate': pubdate,
+                    'totalPages': total_pages,
+                    'coverImage': cover_image,
                     'currentPage': 0,
                     'readingTime': 0
                 }
+            else:
+                print("No book data found in OpenBD response")
+                return None
+                
+        except requests.RequestException as e:
+            print(f"OpenBD API request error: {e}")
+            return None
         except Exception as e:
             print(f"OpenBD API error: {e}")
             return None
     
-    def get_from_ndl(self, isbn):
+    def extract_author(self, onix, summary):
+        # summaryから著者情報を取得
+        author = summary.get('author', '')
+        if author:
+            return author
+        
+        # onixから著者情報を取得
         try:
-            query = f'isbn="{isbn}"'
-            params = {
-                'operation': 'searchRetrieve',
-                'version': '1.2',
-                'query': query,
-                'recordSchema': 'dcndl',
-                'maximumRecords': '1'
-            }
-            
-            response = requests.get(self.base_url, params=params)
-            response.raise_for_status()
-            
-            root = ET.fromstring(response.content)
-            
-            ns = {
-                'srw': 'http://www.loc.gov/zing/srw/',
-                'dc': 'http://purl.org/dc/elements/1.1/',
-                'dcndl': 'http://ndl.go.jp/dcndl/terms/',
-                'rdf': 'http://www.w3.org/1999/02/22-rdf-syntax-ns#',
-                'rdfs': 'http://www.w3.org/2000/01/rdf-schema#'
-            }
-            
-            records = root.findall('.//srw:record', ns)
-            if not records:
-                return None
-            
-            record = records[0]
-            
-            title_elem = record.find('.//dc:title', ns)
-            title = title_elem.text if title_elem is not None else ''
-            
-            author_elem = record.find('.//dc:creator', ns)
-            author = author_elem.text if author_elem is not None else ''
-            
-            publisher_elem = record.find('.//dc:publisher', ns)
-            publisher = publisher_elem.text if publisher_elem is not None else ''
-            
-            date_elem = record.find('.//dc:date', ns)
-            pubdate = date_elem.text if date_elem is not None else ''
-            
-            extent_elem = record.find('.//dcndl:extent', ns)
-            extent = extent_elem.text if extent_elem is not None else ''
-            
-            return {
-                'isbn': isbn,
-                'title': title,
-                'author': author,
-                'publisher': publisher,
-                'pubdate': pubdate,
-                'totalPages': self.extract_pages(extent),
-                'coverImage': '',
-                'currentPage': 0,
-                'readingTime': 0
-            }
-            
+            contributors = onix.get('DescriptiveDetail', {}).get('Contributor', [])
+            if isinstance(contributors, list) and len(contributors) > 0:
+                for contributor in contributors:
+                    if contributor.get('ContributorRole') == 'A01':  # 著者
+                        person_name = contributor.get('PersonName', '')
+                        if person_name:
+                            return person_name
         except Exception as e:
-            print(f"NDL API error: {e}")
-            return None
+            print(f"Error extracting author: {e}")
+        
+        return ''
     
-    def extract_pages(self, extent_text):
-        if not extent_text:
-            return 0
+    def extract_pages(self, onix, summary):
+        # summaryから取得を試行
+        extent = summary.get('extent', '')
+        if extent:
+            pages = self.parse_pages_from_text(extent)
+            if pages > 0:
+                return pages
         
-        page_pattern = r'(\d+)p'
-        match = re.search(page_pattern, extent_text)
-        if match:
-            return int(match.group(1))
-        
-        number_pattern = r'(\d+)'
-        match = re.search(number_pattern, extent_text)
-        if match:
-            return int(match.group(1))
+        # onixから取得を試行
+        try:
+            extents = onix.get('DescriptiveDetail', {}).get('Extent', [])
+            if isinstance(extents, list):
+                for extent in extents:
+                    if extent.get('ExtentType') == '00':  # ページ数
+                        extent_value = extent.get('ExtentValue', '')
+                        if extent_value and extent_value.isdigit():
+                            return int(extent_value)
+        except Exception as e:
+            print(f"Error extracting pages: {e}")
         
         return 0
+    
+    def extract_pubdate(self, onix, summary):
+        # summaryから取得
+        pubdate = summary.get('pubdate', '')
+        if pubdate:
+            return pubdate
+        
+        # onixから取得
+        try:
+            pub_dates = onix.get('PublishingDetail', {}).get('PublishingDate', [])
+            if isinstance(pub_dates, list):
+                for pub_date in pub_dates:
+                    if pub_date.get('PublishingDateRole') == '01':  # 出版日
+                        date_format = pub_date.get('DateFormat', '')
+                        date_value = pub_date.get('Date', '')
+                        if date_value:
+                            return date_value
+        except Exception as e:
+            print(f"Error extracting pubdate: {e}")
+        
+        return ''
+    
+    def extract_cover_image(self, onix, summary):
+        # summaryから取得
+        cover = summary.get('cover', '')
+        if cover:
+            return cover
+        
+        # onixから取得
+        try:
+            collateral_detail = onix.get('CollateralDetail', {})
+            supporting_resources = collateral_detail.get('SupportingResource', [])
+            if isinstance(supporting_resources, list):
+                for resource in supporting_resources:
+                    if resource.get('ResourceContentType') == '01':  # 表紙画像
+                        versions = resource.get('ResourceVersion', [])
+                        if isinstance(versions, list):
+                            for version in versions:
+                                links = version.get('ResourceLink', [])
+                                if isinstance(links, list) and len(links) > 0:
+                                    return links[0]
+        except Exception as e:
+            print(f"Error extracting cover image: {e}")
+        
+        return ''
+    
+    def parse_pages_from_text(self, text):
+        if not text:
+            return 0
+        
+        # 「123p」「123ページ」「123頁」などの形式を検索
+        patterns = [
+            r'(\d+)p\b',
+            r'(\d+)ページ',
+            r'(\d+)頁',
+            r'(\d+)\s*p\b',
+            r'(\d+)\s*pages?',
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, text, re.IGNORECASE)
+            if match:
+                return int(match.group(1))
+        
+        # 数字のみの場合
+        numbers = re.findall(r'\d+', text)
+        if numbers:
+            return int(numbers[0])
+        
+        return 0
+    
 
 # BookService クラスを直接定義
 class BookService:
@@ -169,18 +231,22 @@ class BookService:
         import random
         return f"{int(time.time())}{random.randint(1000, 9999)}"
 
-ndl_api = NDLApi()
+openbd_api = OpenBDApi()
 book_service = BookService()
 
 @app.route('/api/book/<isbn>', methods=['GET'])
 def get_book_by_isbn(isbn):
     try:
-        book_data = ndl_api.get_book_by_isbn(isbn)
+        print(f"Received ISBN request: {isbn}")
+        book_data = openbd_api.get_book_by_isbn(isbn)
         if book_data:
+            print(f"Book data found: {book_data}")
             return jsonify(book_data)
         else:
+            print("No book data found")
             return jsonify({'error': '書籍が見つかりません'}), 404
     except Exception as e:
+        print(f"Error in get_book_by_isbn: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/books', methods=['GET'])
