@@ -58,7 +58,10 @@ class BookApp {
 
     async fetchBookData(isbn) {
         try {
-            const response = await fetch(`http://localhost:5000/api/book/${isbn}`);
+            const apiUrl = window.location.hostname === 'localhost' 
+                ? `http://localhost:5000/api/book/${isbn}`
+                : `/api/book/${isbn}`;
+            const response = await fetch(apiUrl);
             if (!response.ok) {
                 throw new Error('書籍情報が見つかりません');
             }

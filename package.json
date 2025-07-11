@@ -1,0 +1,13 @@
+{
+  "name": "book-progress",
+  "version": "1.0.0",
+  "description": "読書管理アプリケーション",
+  "main": "frontend/index.html",
+  "scripts": {
+    "build": "echo 'Build complete'",
+    "start": "echo 'Starting application'"
+  },
+  "keywords": ["reading", "books", "progress"],
+  "author": "kanalia7355",
+  "license": "MIT"
+}
