@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>読書管理アプリ</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>読書管理アプリ</h1>
+        </header>
+        
+        <main>
+            <section class="isbn-input-section">
+                <h2>書籍登録</h2>
+                <div class="input-group">
+                    <input type="text" id="isbn-input" placeholder="ISBNコードを入力" maxlength="13">
+                    <button id="add-book-btn">書籍を追加</button>
+                </div>
+            </section>
+
+            <section class="books-section">
+                <h2>登録済み書籍</h2>
+                <div id="books-list" class="books-list">
+                    <!-- 書籍リストがここに動的に追加される -->
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="js/app.js"></script>
+    <script src="js/book.js"></script>
+    <script src="js/timer.js"></script>
+</body>
+</html>
