@@ -405,6 +405,13 @@ def test_openbd(isbn):
             'isbn': isbn
         }), 500
 
-# Vercel用のハンドラー
-def handler(request):
-    return app
+# Vercel用のメインハンドラー
+app_handler = app
+
+# Vercel用のエントリーポイント
+def handler(request, context):
+    return app_handler
+
+# デフォルトエクスポート
+if __name__ == "__main__":
+    app.run(debug=True)
